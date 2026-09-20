@@ -1,0 +1,240 @@
+"""Interfaz Streamlit para clasificar textos en los ODS 1 a 16."""
+
+from pathlib import Path
+
+import joblib
+import numpy as np
+import streamlit as st # libreria para crear la interfaz web de la aplicación
+
+# El import registra la función que el pipeline serializado necesita al cargarse.
+from src.text_processing import clean_corpus  # noqa: F401
+
+
+ROOT = Path(__file__).resolve().parent
+MODEL_PATH = ROOT / "models" / "pipeline_ods.joblib"
+
+ODS_NAMES = {
+    1: "Fin de la pobreza",
+    2: "Hambre cero",
+    3: "Salud y bienestar",
+    4: "Educación de calidad",
+    5: "Igualdad de género",
+    6: "Agua limpia y saneamiento",
+    7: "Energía asequible y no contaminante",
+    8: "Trabajo decente y crecimiento económico",
+    9: "Industria, innovación e infraestructura",
+    10: "Reducción de las desigualdades",
+    11: "Ciudades y comunidades sostenibles",
+    12: "Producción y consumo responsables",
+    13: "Acción por el clima",
+    14: "Vida submarina",
+    15: "Vida de ecosistemas terrestres",
+    16: "Paz, justicia e instituciones sólidas",
+}
+
+EXAMPLES = {
+    "Educación": "Ampliar el acceso a una educación inclusiva y de calidad exige reducir la brecha digital, formar docentes y garantizar escuelas seguras en las zonas rurales.",
+    "Agua": "La comunidad necesita sistemas de agua potable, saneamiento seguro y tratamiento de aguas residuales para prevenir enfermedades y proteger las fuentes hídricas.",
+    "Clima": "El plan territorial debe reducir las emisiones, restaurar bosques y preparar a la población ante sequías, inundaciones y otros eventos climáticos extremos.",
+}
+
+
+st.set_page_config(
+    page_title="Brújula ODS · Clasificador de textos",
+    page_icon="◎",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# THESIS: una mesa de análisis que convierte un texto en un dictamen trazable; evita el tablero genérico de métricas.
+# OWN-WORLD: papel azul tinta, verde mineral y amarillo de señal; fichas editoriales, reglas finas y numerales tabulares.
+# STORY: el usuario aporta evidencia textual, solicita el análisis y comprende el ODS principal, las alternativas y los límites.
+# FIRST VIEWPORT: título y método a la izquierda; área de trabajo dominante con entrada y dictamen en dos columnas.
+# FORM: mesa de análisis ODS, sexta dirección de la lista; seed ba0e6ab8.
+# FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+st.markdown(
+    """
+    <!-- impeccable-direction: ba0e6ab8 -->
+    <style>
+    :root {
+        --ink: #10263d;
+        --paper: #f3f1e8;
+        --sheet: #fffdf5;
+        --mineral: #13795b;
+        --signal: #f4c542;
+        --muted: #526474;
+        --rule: #b7c0b9;
+    }
+    html { scroll-behavior: smooth; }
+    body, [data-testid="stAppViewContainer"] { background: var(--paper); color: var(--ink); }
+    [data-testid="stHeader"] { background: rgba(243, 241, 232, .92); }
+    [data-testid="stMainBlockContainer"] { max-width: 1180px; padding: 1.8rem 2.5rem 4rem; }
+    ::selection { background: var(--signal); color: var(--ink); }
+    * { scrollbar-color: var(--mineral) var(--paper); }
+    h1, h2, h3, label { color: var(--ink) !important; }
+    h1 {
+        max-width: 780px;
+        font-family: "Avenir Next", Avenir, "Trebuchet MS", sans-serif;
+        font-size: clamp(2.7rem, 5.2vw, 4.75rem) !important;
+        line-height: .93 !important;
+        letter-spacing: -.035em !important;
+        font-weight: 800 !important;
+        margin: 0 0 .8rem !important;
+    }
+    .lead { max-width: 68ch; font-size: 1.02rem; line-height: 1.55; color: var(--muted); margin-bottom: 1.2rem; }
+    .top-rule { height: 7px; width: 112px; background: var(--signal); margin: 0 0 1.2rem; }
+    .method {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+        border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink);
+        margin: 1.2rem 0 1.6rem;
+    }
+    .method span { padding: .8rem 1rem; border-right: 1px solid var(--rule); font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; }
+    .method span:last-child { border-right: 0; }
+    [data-testid="stTextArea"] textarea {
+        min-height: 112px; background: var(--sheet); color: var(--ink);
+        border: 1px solid var(--ink); border-radius: 12px; box-shadow: 0 12px 28px rgba(16,38,61,.08);
+        caret-color: var(--mineral); font-size: 1rem; line-height: 1.6;
+    }
+    [data-testid="stTextArea"] textarea:focus { border-color: var(--mineral); box-shadow: 0 0 0 3px rgba(19,121,91,.22); }
+    .stButton > button {
+        min-height: 48px; border: 0; border-radius: 10px; background: var(--ink); color: white;
+        font-weight: 750; padding: .7rem 1.25rem; transition: background .18s ease-out, box-shadow .18s ease-out;
+    }
+    .stButton > button p { color: white !important; }
+    .stButton > button:hover { background: var(--mineral); box-shadow: 0 8px 20px rgba(19,121,91,.2); color: white; }
+    .stButton > button:focus-visible { outline: 3px solid var(--signal); outline-offset: 3px; }
+    .result {
+        min-height: 112px; padding: 1.25rem 1.4rem; border-top: 8px solid var(--signal);
+        background: var(--ink); color: white; border-radius: 0 0 14px 14px; box-shadow: 0 14px 30px rgba(16,38,61,.16);
+        animation: reveal .42s cubic-bezier(.16,1,.3,1) both;
+    }
+    @keyframes reveal { from { clip-path: inset(0 0 100% 0); filter: blur(3px); } to { clip-path: inset(0); filter: blur(0); } }
+    @media (prefers-reduced-motion: reduce) { .result { animation: none; } html { scroll-behavior: auto; } }
+    .result .label { color: #b9d7cb; font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; }
+    .result .number { font-size: 4.8rem; line-height: 1; font-weight: 850; font-variant-numeric: tabular-nums; margin: .4rem 0 .25rem; }
+    .result .name { color: white; font-size: 1.35rem; font-weight: 700; max-width: 26ch; }
+    .empty-result { min-height: 112px; display:flex; align-items:end; padding: 1.25rem; border: 1px solid var(--rule); border-radius: 14px; color: var(--muted); background: rgba(255,253,245,.55); }
+    .alt-row { display:grid; grid-template-columns: 55px 1fr 58px; gap:.75rem; align-items:center; margin:.65rem 0; font-variant-numeric: tabular-nums; }
+    .track { height: 8px; background:#dfe4de; border-radius:99px; overflow:hidden; }
+    .fill { height:100%; background:var(--mineral); border-radius:99px; }
+    .note { padding: 1rem 1.15rem; background:#e1eee8; color:#163c31; border-radius:12px; margin-top:1.6rem; font-size:.92rem; line-height:1.55; }
+    .footer-note { color: var(--muted); border-top: 1px solid var(--rule); margin-top: 3.2rem; padding-top: 1.2rem; font-size: .86rem; }
+    @media (max-width: 720px) {
+        [data-testid="stMainBlockContainer"] { padding: 1.1rem 1rem 3rem; }
+        h1 { font-size: 2.7rem !important; }
+        .lead { line-height: 1.45; margin-bottom: .85rem; }
+        .top-rule { margin-bottom: .8rem; }
+        .method { margin: .9rem 0 1.2rem; }
+        .method { grid-template-columns: 1fr 1fr; }
+        .method span:nth-child(2) { border-right: 0; }
+        .method span:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+@st.cache_resource(show_spinner="Cargando el modelo entrenado…")
+def load_model():
+    """Carga una sola vez el pipeline reproducible del proyecto."""
+    if not MODEL_PATH.exists():
+        raise FileNotFoundError(f"No se encontró el modelo en {MODEL_PATH}")
+    return joblib.load(MODEL_PATH)
+
+
+def alternatives(model, text: str, top_n: int = 3):
+    """Devuelve clases y márgenes ordenados; los porcentajes son escala relativa visual."""
+    margins = np.asarray(model.decision_function([text])).reshape(-1)
+    classes = np.asarray(model.classes_, dtype=int)
+    order = np.argsort(margins)[::-1][:top_n]
+    selected = margins[order]
+    low, high = float(margins.min()), float(margins.max())
+    scaled = (selected - low) / (high - low) if high > low else np.ones_like(selected)
+    return [(int(classes[i]), float(margins[i]), float(scale)) for i, scale in zip(order, scaled)]
+
+
+st.markdown('<div class="top-rule"></div>', unsafe_allow_html=True)
+st.title("¿Qué objetivo moviliza este texto?")
+st.markdown(
+    '<p class="lead">Una brújula lingüística para explorar políticas, iniciativas y argumentos en español. '
+    "El análisis reutiliza el pipeline TF-IDF + LSA + SVM validado en el proyecto.</p>",
+    unsafe_allow_html=True,
+)
+st.markdown(
+    '<div class="method"><span>Texto en español</span><span>TF-IDF</span><span>LSA · 300 dimensiones</span><span>Dictamen ODS</span></div>',
+    unsafe_allow_html=True,
+)
+
+example_name = st.selectbox("Probar un texto de ejemplo", ["Escribir mi propio texto", *EXAMPLES.keys()])
+default_text = "" if example_name == "Escribir mi propio texto" else EXAMPLES[example_name]
+
+left, right = st.columns([1.55, 1], gap="large")
+with left:
+    text_input = st.text_area(
+        "Texto para analizar",
+        value=default_text,
+        height=112,
+        placeholder="Describe aquí una política, problema social, iniciativa ambiental o argumento relacionado con el desarrollo sostenible…",
+        help="Para obtener una señal más estable, utiliza al menos una oración completa.",
+    )
+    analyze = st.button("Clasificar el texto", type="primary", use_container_width=True)
+
+with right:
+    result_slot = st.container()
+    if not analyze:
+        result_slot.markdown(
+            '<div class="empty-result">El dictamen aparecerá aquí después de analizar el texto.</div>',
+            unsafe_allow_html=True,
+        )
+
+if analyze:
+    cleaned = text_input.strip()
+    if not cleaned:
+        st.error("El campo está vacío. Escribe o selecciona un texto antes de clasificar.")
+    elif len(cleaned.split()) < 5:
+        st.warning("El texto es demasiado breve para ofrecer una señal útil. Añade una oración con más contexto.")
+    else:
+        try:
+            model = load_model()
+            prediction = int(model.predict([cleaned])[0])
+            ranked = alternatives(model, cleaned)
+            with result_slot:
+                st.markdown(
+                    f'<div class="result"><div class="label">ODS predominante</div>'
+                    f'<div class="number">{prediction:02d}</div>'
+                    f'<div class="name">{ODS_NAMES[prediction]}</div></div>',
+                    unsafe_allow_html=True,
+                )
+
+            st.subheader("Alternativas del clasificador")
+            st.caption("Los valores son márgenes de decisión de la SVM; indican orden relativo, no probabilidades.")
+            for ods, margin, scale in ranked:
+                st.markdown(
+                    f'<div class="alt-row"><strong>ODS {ods}</strong><div class="track">'
+                    f'<div class="fill" style="width:{max(5, scale * 100):.1f}%"></div></div>'
+                    f'<span>{margin:+.2f}</span></div>',
+                    unsafe_allow_html=True,
+                )
+            st.markdown(
+                '<div class="note"><strong>Cómo leer este resultado.</strong> Úsalo como apoyo exploratorio. '
+                "El modelo puede confundir objetivos con vocabulario cercano y no reemplaza una revisión temática experta.</div>",
+                unsafe_allow_html=True,
+            )
+        except Exception as exc:
+            st.error(f"No fue posible ejecutar el modelo. Verifica los archivos del proyecto. Detalle: {exc}")
+
+with st.expander("Alcance y desempeño del modelo"):
+    st.markdown(
+        """
+        - **Cobertura:** ODS 1 a 16. El conjunto de datos no incluye observaciones del ODS 17.
+        - **Evaluación independiente:** exactitud 0,8727; F1 macro 0,8406; F1 ponderado 0,8727.
+        - **Pipeline:** limpieza reproducible, TF-IDF con unigramas y bigramas, SVD de 300 componentes, normalización y LinearSVC.
+        - **Uso previsto:** demostración académica y exploración de textos en español; no es un sistema de decisión automática.
+        """
+    )
+
+st.markdown(
+    '<p class="footer-note">Proyecto académico · Machine Learning no supervisado · El ODS 17 está fuera del alcance por ausencia de datos de entrenamiento.</p>',
+    unsafe_allow_html=True,
+)
