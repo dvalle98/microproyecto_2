@@ -6,7 +6,14 @@ from pathlib import Path
 import joblib
 import numpy as np
 import streamlit as st # libreria para crear la interfaz web de la aplicación
-from streamlit_mic_recorder import speech_to_text
+
+try:
+    from streamlit_mic_recorder import speech_to_text
+
+    MIC_RECORDER_AVAILABLE = True
+except ModuleNotFoundError:
+    speech_to_text = None
+    MIC_RECORDER_AVAILABLE = False
 
 # El import registra la función que el pipeline serializado necesita al cargarse.
 from src.text_processing import clean_corpus  # noqa: F401
@@ -206,12 +213,22 @@ st.markdown(
 if "analysis_text" not in st.session_state:
     st.session_state.analysis_text = ""
 
+input_mode_options = ["Escribir", "Adjuntar archivo"]
+if MIC_RECORDER_AVAILABLE:
+    input_mode_options.append("Dictar")
+
 input_mode = st.radio(
     "Origen del texto",
-    ["Escribir", "Adjuntar archivo", "Dictar"],
+    input_mode_options,
     horizontal=True,
     help="El contenido extraído o transcrito siempre puede revisarse antes de clasificarlo.",
 )
+
+if not MIC_RECORDER_AVAILABLE:
+    st.info(
+        "El modo de dictado no esta disponible en este despliegue porque no se pudo cargar "
+        "`streamlit-mic-recorder`. Puedes usar las opciones Escribir o Adjuntar archivo."
+    )
 
 if input_mode == "Escribir":
     example_name = st.selectbox("Probar un texto de ejemplo", ["Escribir mi propio texto", *EXAMPLES.keys()])
@@ -257,7 +274,7 @@ elif input_mode == "Adjuntar archivo":
                         f"El documento excede {MAX_TEXT_CHARACTERS:,} caracteres; se cargó el inicio para mantener una clasificación estable."
                     )
 
-else:
+elif input_mode == "Dictar":
     st.markdown("**Dictar el texto**")
     st.caption(
         "El navegador solicitará permiso para usar el micrófono. Al detener el dictado, el audio se procesará "
