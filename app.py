@@ -17,11 +17,27 @@ except ModuleNotFoundError:
 
 # El import registra la función que el pipeline serializado necesita al cargarse.
 from src.text_processing import clean_corpus  # noqa: F401
-from src.input_processing import (
-    MAX_TEXT_CHARACTERS,
-    UserInputError,
-    extract_document_text,
-)
+
+try:
+    from src.input_processing import (
+        MAX_TEXT_CHARACTERS,
+        UserInputError,
+        extract_document_text,
+    )
+
+    INPUT_PROCESSING_AVAILABLE = True
+except ModuleNotFoundError:
+    INPUT_PROCESSING_AVAILABLE = False
+    MAX_TEXT_CHARACTERS = 6000
+
+    class UserInputError(Exception):
+        """Error de validacion para entradas del usuario."""
+
+    def extract_document_text(file_name: str, payload: bytes):
+        raise UserInputError(
+            "La opcion de adjuntar archivo no esta disponible en este despliegue "
+            "porque no se pudo cargar `src.input_processing`."
+        )
 
 
 ROOT = Path(__file__).resolve().parent
@@ -213,7 +229,9 @@ st.markdown(
 if "analysis_text" not in st.session_state:
     st.session_state.analysis_text = ""
 
-input_mode_options = ["Escribir", "Adjuntar archivo"]
+input_mode_options = ["Escribir"]
+if INPUT_PROCESSING_AVAILABLE:
+    input_mode_options.append("Adjuntar archivo")
 if MIC_RECORDER_AVAILABLE:
     input_mode_options.append("Dictar")
 
@@ -224,10 +242,16 @@ input_mode = st.radio(
     help="El contenido extraído o transcrito siempre puede revisarse antes de clasificarlo.",
 )
 
+if not INPUT_PROCESSING_AVAILABLE:
+    st.info(
+        "El modo de adjuntar archivo no esta disponible en este despliegue porque no se pudo cargar "
+        "`src.input_processing`. Puedes escribir o dictar el texto."
+    )
+
 if not MIC_RECORDER_AVAILABLE:
     st.info(
         "El modo de dictado no esta disponible en este despliegue porque no se pudo cargar "
-        "`streamlit-mic-recorder`. Puedes usar las opciones Escribir o Adjuntar archivo."
+        "`streamlit-mic-recorder`. Puedes usar las opciones disponibles de entrada."
     )
 
 if input_mode == "Escribir":
