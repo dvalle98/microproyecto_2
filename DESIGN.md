@@ -21,7 +21,8 @@ La familia de interfaz es sans serif, con `Avenir Next` como voz preferida y alt
 
 ## Componentes
 
-- **Entrada:** hoja clara con borde de tinta, foco verde y área suficiente para una oración completa.
+- **Origen de entrada:** control compacto para escribir, adjuntar o dictar sin duplicar el flujo principal.
+- **Entrada:** hoja clara con borde de tinta, foco verde y área suficiente para revisar o corregir el texto, cualquiera que sea su origen.
 - **Acción:** botón de tinta con texto blanco; en interacción cambia a verde mineral y conserva un foco amarillo visible.
 - **Dictamen:** placa de tinta con regla amarilla, número ODS dominante y nombre completo.
 - **Alternativas:** lista separada por reglas con número, nombre, explicación breve, barra comparativa y margen numérico; nunca se denominan probabilidades.
@@ -31,7 +32,7 @@ Los radios se mantienen entre 10 y 14 px. La profundidad proviene de sombras sua
 
 ## Movimiento y estados
 
-El único gesto de entrada es el despliegue breve del dictamen mediante recorte y desenfoque. Se desactiva con `prefers-reduced-motion`. La interfaz incluye estados vacío, validación por texto ausente o demasiado corto, carga del modelo y error recuperable.
+El único gesto de entrada es el despliegue breve del dictamen mediante recorte y desenfoque. Se desactiva con `prefers-reduced-motion`. La interfaz incluye estados vacío, validación por texto ausente o demasiado corto, extracción correcta o fallida, transcripción pendiente, carga del modelo y errores recuperables de archivo, credencial, red o cuota.
 
 ## Responsividad
 
@@ -43,3 +44,5 @@ En escritorio, entrada y dictamen comparten una composición de dos columnas. En
 - Mantener visible que el ODS 17 está fuera del alcance.
 - No sustituir el flujo principal por una colección de tarjetas o indicadores decorativos.
 - Preservar contraste, navegación por teclado y lectura móvil.
+- Nunca clasificar automáticamente un documento o dictado: el texto resultante debe quedar visible y editable antes de la acción.
+- Explicar en el punto de uso cuándo una grabación se enviará al servicio de transcripción.

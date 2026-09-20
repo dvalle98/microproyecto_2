@@ -1,5 +1,7 @@
 """Interfaz Streamlit para clasificar textos en los ODS 1 a 16."""
 
+import hashlib
+import os
 from pathlib import Path
 
 import joblib
@@ -8,6 +10,12 @@ import streamlit as st # libreria para crear la interfaz web de la aplicación
 
 # El import registra la función que el pipeline serializado necesita al cargarse.
 from src.text_processing import clean_corpus  # noqa: F401
+from src.input_processing import (
+    MAX_TEXT_CHARACTERS,
+    UserInputError,
+    extract_document_text,
+    transcribe_audio,
+)
 
 
 ROOT = Path(__file__).resolve().parent
@@ -109,6 +117,12 @@ st.markdown(
     }
     .method span { padding: .8rem 1rem; border-right: 1px solid var(--rule); font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; }
     .method span:last-child { border-right: 0; }
+    [data-testid="stRadio"] > label { font-weight: 700; color: var(--ink); }
+    [data-testid="stFileUploader"] section {
+        background: rgba(255,253,245,.65); border-color: var(--rule); border-radius: 12px;
+    }
+    [data-testid="stFileUploader"] section:hover { border-color: var(--mineral); }
+    [data-testid="stAudioInput"] { margin-bottom: .3rem; }
     [data-testid="stTextArea"] textarea {
         min-height: 112px; background: var(--sheet); color: var(--ink);
         border: 1px solid var(--ink); border-radius: 12px; box-shadow: 0 12px 28px rgba(16,38,61,.08);
@@ -179,29 +193,128 @@ def alternatives(model, text: str, top_n: int = 3):
     return [(int(classes[i]), float(margins[i]), float(scale)) for i, scale in zip(order, scaled)]
 
 
+def openai_api_key() -> str:
+    """Obtiene la clave desde Streamlit Secrets o, localmente, desde el entorno."""
+    try:
+        secret = st.secrets.get("OPENAI_API_KEY", "")
+    except (FileNotFoundError, KeyError):
+        secret = ""
+    return str(secret or os.getenv("OPENAI_API_KEY", "")).strip()
+
+
+def transcription_error_message(exc: Exception) -> str:
+    """Convierte fallos de red/API en instrucciones recuperables sin filtrar secretos."""
+    name = type(exc).__name__
+    if name == "AuthenticationError":
+        return "La credencial de transcripción no es válida. Revisa OPENAI_API_KEY en los secretos de la aplicación."
+    if name == "RateLimitError":
+        return "El servicio de transcripción alcanzó su límite temporal. Espera un momento e inténtalo de nuevo."
+    if name in {"APIConnectionError", "APITimeoutError"}:
+        return "No fue posible conectar con el servicio de transcripción. Conserva tu grabación e inténtalo nuevamente."
+    if isinstance(exc, UserInputError):
+        return str(exc)
+    return "No fue posible transcribir el audio. Intenta otra grabación o escribe el texto manualmente."
+
+
 st.markdown('<div class="top-rule"></div>', unsafe_allow_html=True)
 st.title("¿Qué objetivo moviliza este texto?")
 st.markdown(
-    '<p class="lead">Una brújula lingüística para explorar políticas, iniciativas y argumentos en español. '
+    '<p class="lead">Escribe, adjunta o dicta una idea para explorar políticas, iniciativas y argumentos en español. '
     "El análisis reutiliza el pipeline TF-IDF + LSA + SVM validado en el proyecto.</p>",
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="method"><span>Texto en español</span><span>TF-IDF</span><span>LSA · 300 dimensiones</span><span>Dictamen ODS</span></div>',
+    '<div class="method"><span>Escribir · adjuntar · dictar</span><span>TF-IDF</span><span>LSA · 300 dimensiones</span><span>Dictamen ODS</span></div>',
     unsafe_allow_html=True,
 )
 
-example_name = st.selectbox("Probar un texto de ejemplo", ["Escribir mi propio texto", *EXAMPLES.keys()])
-default_text = "" if example_name == "Escribir mi propio texto" else EXAMPLES[example_name]
+if "analysis_text" not in st.session_state:
+    st.session_state.analysis_text = ""
+
+input_mode = st.radio(
+    "Origen del texto",
+    ["Escribir", "Adjuntar archivo", "Dictar"],
+    horizontal=True,
+    help="El contenido extraído o transcrito siempre puede revisarse antes de clasificarlo.",
+)
+
+if input_mode == "Escribir":
+    example_name = st.selectbox("Probar un texto de ejemplo", ["Escribir mi propio texto", *EXAMPLES.keys()])
+    if example_name != st.session_state.get("_last_example"):
+        if example_name in EXAMPLES:
+            st.session_state.analysis_text = EXAMPLES[example_name]
+        st.session_state._last_example = example_name
+
+elif input_mode == "Adjuntar archivo":
+    uploaded_document = st.file_uploader(
+        "Adjuntar un documento",
+        type=["txt", "md", "pdf", "docx"],
+        accept_multiple_files=False,
+        max_upload_size=5,
+        help="Un archivo de hasta 5 MB. Los PDF escaneados sin texto seleccionable requieren OCR.",
+    )
+    if uploaded_document is not None:
+        payload = uploaded_document.getvalue()
+        fingerprint = hashlib.sha256(uploaded_document.name.encode("utf-8") + b"\0" + payload).hexdigest()
+        if fingerprint != st.session_state.get("_document_fingerprint"):
+            st.session_state._document_fingerprint = fingerprint
+            try:
+                extracted = extract_document_text(uploaded_document.name, payload)
+                st.session_state.analysis_text = extracted.text
+                st.session_state._document_status = (
+                    uploaded_document.name,
+                    extracted.original_characters,
+                    extracted.truncated,
+                    None,
+                )
+            except UserInputError as exc:
+                st.session_state._document_status = (uploaded_document.name, 0, False, str(exc))
+
+        status = st.session_state.get("_document_status")
+        if status and status[0] == uploaded_document.name:
+            _, characters, truncated, error = status
+            if error:
+                st.error(error)
+            else:
+                st.success(f"Texto extraído: {characters:,} caracteres. Revísalo antes de clasificar.")
+                if truncated:
+                    st.warning(
+                        f"El documento excede {MAX_TEXT_CHARACTERS:,} caracteres; se cargó el inicio para mantener una clasificación estable."
+                    )
+
+else:
+    recorded_audio = st.audio_input(
+        "Dictar el texto",
+        sample_rate=16_000,
+        help="Graba una idea en español de hasta 60 segundos.",
+    )
+    st.caption(
+        "Al pulsar **Transcribir el audio**, la grabación se enviará a OpenAI para convertirla en texto. "
+        "La clasificación ODS se realiza después y puedes corregir la transcripción."
+    )
+    transcribe = st.button(
+        "Transcribir el audio",
+        disabled=recorded_audio is None,
+        use_container_width=True,
+    )
+    if transcribe and recorded_audio is not None:
+        with st.spinner("Transcribiendo el dictado…"):
+            try:
+                transcript = transcribe_audio(recorded_audio.getvalue(), openai_api_key())
+                st.session_state.analysis_text = transcript
+                st.success("Dictado transcrito. Revisa el texto antes de clasificarlo.")
+            except Exception as exc:
+                st.error(transcription_error_message(exc))
 
 left, right = st.columns([1.55, 1], gap="large")
 with left:
     text_input = st.text_area(
         "Texto para analizar",
-        value=default_text,
+        key="analysis_text",
         height=112,
+        max_chars=MAX_TEXT_CHARACTERS,
         placeholder="Describe aquí una política, problema social, iniciativa ambiental o argumento relacionado con el desarrollo sostenible…",
-        help="Para obtener una señal más estable, utiliza al menos una oración completa.",
+        help=f"Para obtener una señal más estable, utiliza al menos una oración completa. Máximo {MAX_TEXT_CHARACTERS:,} caracteres.",
     )
     analyze = st.button("Clasificar el texto", type="primary", use_container_width=True)
 

@@ -18,7 +18,7 @@ Proyecto académico de procesamiento de lenguaje natural en español. Combina an
 - `models/pipeline_ods.joblib`: pipeline entrenado y serializado.
 - `models/metadata_modelo.json`: métricas, parámetros y huellas de archivos.
 - `data/particion_train_test.csv`: partición reproducible de entrenamiento y prueba.
-- `app.py`: aplicación Streamlit para clasificar textos nuevos.
+- `app.py`: aplicación Streamlit para clasificar textos escritos, adjuntos o dictados.
 
 ## Instalación
 
@@ -37,6 +37,18 @@ streamlit run app.py
 ```
 
 La aplicación muestra el ODS predicho y las principales alternativas. Los valores del clasificador son márgenes de decisión relativos de `LinearSVC`; no son probabilidades calibradas.
+
+### Adjuntar documentos y dictar
+
+La interfaz admite documentos TXT, MD, PDF y DOCX de hasta 5 MB. Los PDF deben contener texto seleccionable; los documentos escaneados requieren OCR antes de adjuntarlos.
+
+El dictado utiliza el micrófono del navegador y transcribe grabaciones de hasta 60 segundos mediante `gpt-4o-mini-transcribe`. Configura la clave sin añadirla al repositorio:
+
+```bash
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml
+```
+
+Después reemplaza el valor de `OPENAI_API_KEY` en `.streamlit/secrets.toml`. En Streamlit Community Cloud agrega la misma variable desde **App settings → Secrets**. El audio se envía a OpenAI únicamente cuando la persona pulsa **Transcribir el audio**; la transcripción queda editable antes de clasificarla.
 
 ## Reproducir el análisis
 

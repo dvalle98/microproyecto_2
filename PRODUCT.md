@@ -24,7 +24,7 @@ La interfaz no es un clasificador genérico: reutiliza el modelo reproducible y 
 
 ## Operating Context
 
-Se ejecuta localmente como demostración académica. El usuario pega o redacta un texto en español, solicita la clasificación y revisa el resultado principal y las alternativas según el margen del clasificador.
+Se ejecuta como demostración académica en Streamlit. El usuario redacta un texto, extrae el contenido de un documento o transcribe un dictado en español, revisa el texto resultante, solicita la clasificación y consulta el resultado principal y las alternativas según el margen del clasificador.
 
 ## Capabilities and Constraints
 
@@ -32,6 +32,8 @@ Se ejecuta localmente como demostración académica. El usuario pega o redacta u
 - El conjunto disponible no contiene ejemplos del ODS 17.
 - `LinearSVC` produce márgenes de decisión, no probabilidades calibradas.
 - El modelo se carga desde `models/pipeline_ods.joblib` y requiere el módulo local `src.text_processing`.
+- Los documentos admitidos son TXT, MD, PDF y DOCX de hasta 5 MB; los PDF escaneados requieren OCR previo.
+- El dictado admite hasta 60 segundos y requiere `OPENAI_API_KEY`; el audio se envía a OpenAI solo al solicitar la transcripción.
 - Las métricas del conjunto de prueba son: exactitud 0,8727, F1 macro 0,8406 y F1 ponderado 0,8727.
 
 ## Evidence on Hand
