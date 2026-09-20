@@ -32,6 +32,25 @@ ODS_NAMES = {
     16: "Paz, justicia e instituciones sólidas",
 }
 
+ODS_DETAILS = {
+    1: "Reducir la pobreza en todas sus formas mediante protección social, acceso a recursos y oportunidades.",
+    2: "Poner fin al hambre, mejorar la nutrición y promover sistemas alimentarios y agricultura sostenibles.",
+    3: "Garantizar una vida saludable y promover el bienestar de las personas en todas las edades.",
+    4: "Asegurar una educación inclusiva y equitativa de calidad y oportunidades de aprendizaje permanente.",
+    5: "Alcanzar la igualdad de género y fortalecer los derechos y oportunidades de mujeres y niñas.",
+    6: "Garantizar agua segura, saneamiento adecuado y una gestión sostenible de los recursos hídricos.",
+    7: "Ampliar el acceso a energía asequible, confiable, sostenible y moderna.",
+    8: "Promover crecimiento inclusivo, empleo productivo y condiciones de trabajo decentes.",
+    9: "Desarrollar infraestructura resiliente, industrialización sostenible e innovación.",
+    10: "Reducir las desigualdades dentro de los países y entre ellos.",
+    11: "Construir ciudades y asentamientos inclusivos, seguros, resilientes y sostenibles.",
+    12: "Impulsar modalidades sostenibles de producción y consumo y el uso eficiente de los recursos.",
+    13: "Adoptar medidas frente al cambio climático, sus impactos y la necesidad de adaptación.",
+    14: "Conservar los océanos, los mares y los recursos marinos y utilizarlos de forma sostenible.",
+    15: "Proteger los ecosistemas terrestres, los bosques, los suelos y la biodiversidad.",
+    16: "Promover sociedades pacíficas, acceso a la justicia e instituciones eficaces e inclusivas.",
+}
+
 EXAMPLES = {
     "Educación": "Ampliar el acceso a una educación inclusiva y de calidad exige reducir la brecha digital, formar docentes y garantizar escuelas seguras en las zonas rurales.",
     "Agua": "La comunidad necesita sistemas de agua potable, saneamiento seguro y tratamiento de aguas residuales para prevenir enfermedades y proteger las fuentes hídricas.",
@@ -114,7 +133,13 @@ st.markdown(
     .result .number { font-size: 4.8rem; line-height: 1; font-weight: 850; font-variant-numeric: tabular-nums; margin: .4rem 0 .25rem; }
     .result .name { color: white; font-size: 1.35rem; font-weight: 700; max-width: 26ch; }
     .empty-result { min-height: 112px; display:flex; align-items:end; padding: 1.25rem; border: 1px solid var(--rule); border-radius: 14px; color: var(--muted); background: rgba(255,253,245,.55); }
-    .alt-row { display:grid; grid-template-columns: 55px 1fr 58px; gap:.75rem; align-items:center; margin:.65rem 0; font-variant-numeric: tabular-nums; }
+    .alt-list { display: grid; gap: 0; margin-top: .35rem; }
+    .alt-item { padding: .8rem 0 1rem; border-bottom: 1px solid var(--rule); }
+    .alt-item:last-child { border-bottom: 0; }
+    .alt-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; font-variant-numeric: tabular-nums; }
+    .alt-title { color: var(--ink); font-weight: 750; }
+    .alt-margin { color: var(--ink); font-weight: 650; white-space: nowrap; }
+    .alt-description { max-width: 72ch; margin: .25rem 0 .6rem; color: var(--muted); font-size: .91rem; line-height: 1.45; }
     .track { height: 8px; background:#dfe4de; border-radius:99px; overflow:hidden; }
     .fill { height:100%; background:var(--mineral); border-radius:99px; }
     .note { padding: 1rem 1.15rem; background:#e1eee8; color:#163c31; border-radius:12px; margin-top:1.6rem; font-size:.92rem; line-height:1.55; }
@@ -209,13 +234,18 @@ if analyze:
 
             st.subheader("Alternativas del clasificador")
             st.caption("Los valores son márgenes de decisión de la SVM; indican orden relativo, no probabilidades.")
+            alternatives_html = ['<div class="alt-list">']
             for ods, margin, scale in ranked:
-                st.markdown(
-                    f'<div class="alt-row"><strong>ODS {ods}</strong><div class="track">'
-                    f'<div class="fill" style="width:{max(5, scale * 100):.1f}%"></div></div>'
-                    f'<span>{margin:+.2f}</span></div>',
-                    unsafe_allow_html=True,
+                alternatives_html.append(
+                    '<div class="alt-item">'
+                    f'<div class="alt-heading"><span class="alt-title">ODS {ods} · {ODS_NAMES[ods]}</span>'
+                    f'<span class="alt-margin">{margin:+.2f}</span></div>'
+                    f'<p class="alt-description">{ODS_DETAILS[ods]}</p>'
+                    f'<div class="track"><div class="fill" style="width:{max(5, scale * 100):.1f}%"></div></div>'
+                    '</div>'
                 )
+            alternatives_html.append('</div>')
+            st.markdown("".join(alternatives_html), unsafe_allow_html=True)
             st.markdown(
                 '<div class="note"><strong>Cómo leer este resultado.</strong> Úsalo como apoyo exploratorio. '
                 "El modelo puede confundir objetivos con vocabulario cercano y no reemplaza una revisión temática experta.</div>",

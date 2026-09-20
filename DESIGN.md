@@ -24,7 +24,7 @@ La familia de interfaz es sans serif, con `Avenir Next` como voz preferida y alt
 - **Entrada:** hoja clara con borde de tinta, foco verde y área suficiente para una oración completa.
 - **Acción:** botón de tinta con texto blanco; en interacción cambia a verde mineral y conserva un foco amarillo visible.
 - **Dictamen:** placa de tinta con regla amarilla, número ODS dominante y nombre completo.
-- **Alternativas:** barras comparativas verdes acompañadas por ODS y margen numérico; nunca se denominan probabilidades.
+- **Alternativas:** lista separada por reglas con número, nombre, explicación breve, barra comparativa y margen numérico; nunca se denominan probabilidades.
 - **Notas:** superficies verdes suaves para interpretación y límites.
 
 Los radios se mantienen entre 10 y 14 px. La profundidad proviene de sombras suaves con desplazamiento, no de halos.
