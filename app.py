@@ -1,6 +1,8 @@
 """Interfaz Streamlit para clasificar textos en los ODS 1 a 16."""
 
 import hashlib
+import os
+from io import BytesIO
 from pathlib import Path
 
 import joblib
@@ -8,12 +10,12 @@ import numpy as np
 import streamlit as st # libreria para crear la interfaz web de la aplicación
 
 try:
-    from streamlit_mic_recorder import speech_to_text
+    from openai import OpenAI
 
-    MIC_RECORDER_AVAILABLE = True
+    OPENAI_SDK_AVAILABLE = True
 except ModuleNotFoundError:
-    speech_to_text = None
-    MIC_RECORDER_AVAILABLE = False
+    OpenAI = None
+    OPENAI_SDK_AVAILABLE = False
 
 # El import registra la función que el pipeline serializado necesita al cargarse.
 from src.text_processing import clean_corpus  # noqa: F401
@@ -42,6 +44,9 @@ except ModuleNotFoundError:
 
 ROOT = Path(__file__).resolve().parent
 MODEL_PATH = ROOT / "models" / "pipeline_ods.joblib"
+DICTATION_MODEL = "gpt-4o-mini-transcribe"
+AUDIO_INPUT_AVAILABLE = hasattr(st, "audio_input")
+DICTATION_AVAILABLE = AUDIO_INPUT_AVAILABLE and OPENAI_SDK_AVAILABLE
 
 ODS_NAMES = {
     1: "Fin de la pobreza",
@@ -203,6 +208,45 @@ def load_model():
     return joblib.load(MODEL_PATH)
 
 
+def get_openai_api_key() -> str | None:
+    """Obtiene la API key desde secretos de Streamlit o variables de entorno."""
+    try:
+        key = st.secrets.get("OPENAI_API_KEY")
+        if key:
+            return key
+    except Exception:
+        pass
+
+    key = os.getenv("OPENAI_API_KEY")
+    if key:
+        return key
+    return None
+
+
+def transcribe_audio_with_openai(audio_file, api_key: str) -> str:
+    """Transcribe audio en espanol usando el endpoint de OpenAI Speech-to-Text."""
+    if not OPENAI_SDK_AVAILABLE:
+        raise UserInputError("No se pudo cargar el SDK de OpenAI para transcribir audio.")
+
+    audio_bytes = audio_file.getvalue()
+    if not audio_bytes:
+        raise UserInputError("No se detecto audio para transcribir.")
+
+    buffer = BytesIO(audio_bytes)
+    buffer.name = audio_file.name or "dictado.wav"
+
+    client = OpenAI(api_key=api_key)
+    transcript = client.audio.transcriptions.create(
+        model=DICTATION_MODEL,
+        file=buffer,
+        language="es",
+    )
+    text = (transcript.text or "").strip()
+    if not text:
+        raise UserInputError("La transcripcion llego vacia. Intenta grabar de nuevo.")
+    return text
+
+
 def alternatives(model, text: str, top_n: int = 3):
     """Devuelve clases y márgenes ordenados; los porcentajes son escala relativa visual."""
     margins = np.asarray(model.decision_function([text])).reshape(-1)
@@ -232,7 +276,7 @@ if "analysis_text" not in st.session_state:
 input_mode_options = ["Escribir"]
 if INPUT_PROCESSING_AVAILABLE:
     input_mode_options.append("Adjuntar archivo")
-if MIC_RECORDER_AVAILABLE:
+if DICTATION_AVAILABLE:
     input_mode_options.append("Dictar")
 
 input_mode = st.radio(
@@ -245,13 +289,13 @@ input_mode = st.radio(
 if not INPUT_PROCESSING_AVAILABLE:
     st.info(
         "El modo de adjuntar archivo no esta disponible en este despliegue porque no se pudo cargar "
-        "`src.input_processing`. Puedes escribir o dictar el texto."
+        "`src.input_processing`. Puedes usar las opciones disponibles de entrada."
     )
 
-if not MIC_RECORDER_AVAILABLE:
+if not DICTATION_AVAILABLE:
     st.info(
-        "El modo de dictado no esta disponible en este despliegue porque no se pudo cargar "
-        "`streamlit-mic-recorder`. Puedes usar las opciones disponibles de entrada."
+        "El modo de dictado no esta disponible en este despliegue porque faltan componentes de audio "
+        "o el SDK de OpenAI. Puedes usar las opciones disponibles de entrada."
     )
 
 if input_mode == "Escribir":
@@ -301,23 +345,38 @@ elif input_mode == "Adjuntar archivo":
 elif input_mode == "Dictar":
     st.markdown("**Dictar el texto**")
     st.caption(
-        "El navegador solicitará permiso para usar el micrófono. Al detener el dictado, el audio se procesará "
-        "mediante el reconocimiento de voz de Google; revisa el texto antes de clasificarlo."
+        "El navegador solicitara permiso para usar el microfono. Al terminar la grabacion, el audio "
+        "se transcribira con OpenAI Speech-to-Text antes de clasificarlo."
     )
-    dictated_text = speech_to_text(
-        language="es-CO",
-        start_prompt="Iniciar dictado",
-        stop_prompt="Detener y transcribir",
-        just_once=True,
-        use_container_width=True,
-        key="ods_dictation",
+    api_key = get_openai_api_key()
+    if not api_key:
+        st.warning(
+            "Falta configurar `OPENAI_API_KEY`. Agregala en Secrets de Streamlit Cloud "
+            "o como variable de entorno para habilitar la transcripcion."
+        )
+
+    recorded_audio = st.audio_input(
+        "Graba tu texto",
+        help="Cuando termines, la app transcribe automaticamente el audio en espanol.",
+        key="ods_dictation_audio",
     )
-    if dictated_text:
-        normalized_dictation = dictated_text.strip()
-        if normalized_dictation and normalized_dictation != st.session_state.get("_last_dictation"):
-            st.session_state.analysis_text = normalized_dictation[:MAX_TEXT_CHARACTERS]
-            st.session_state._last_dictation = normalized_dictation
-            st.success("Dictado transcrito. Revisa el texto antes de clasificarlo.")
+
+    if recorded_audio is not None:
+        audio_fingerprint = hashlib.sha256(recorded_audio.getvalue()).hexdigest()
+        if audio_fingerprint != st.session_state.get("_audio_fingerprint"):
+            st.session_state._audio_fingerprint = audio_fingerprint
+            if not api_key:
+                st.error("No se pudo transcribir porque falta `OPENAI_API_KEY`.")
+            else:
+                try:
+                    with st.spinner("Transcribiendo audio…"):
+                        dictated_text = transcribe_audio_with_openai(recorded_audio, api_key)
+                    if dictated_text != st.session_state.get("_last_dictation"):
+                        st.session_state.analysis_text = dictated_text[:MAX_TEXT_CHARACTERS]
+                        st.session_state._last_dictation = dictated_text
+                        st.success("Dictado transcrito. Revisa el texto antes de clasificarlo.")
+                except Exception as exc:
+                    st.error(f"No fue posible transcribir el audio. Detalle: {exc}")
 
 left, right = st.columns([1.55, 1], gap="large")
 with left:

@@ -13,4 +13,4 @@ ipykernel==7.3.0
 streamlit==1.64.0
 pypdf==6.19.0
 python-docx==1.2.0
-streamlit-mic-recorder==0.0.8
+openai==1.107.2

@@ -42,7 +42,7 @@ La aplicación muestra el ODS predicho y las principales alternativas. Los valor
 
 La interfaz admite documentos TXT, MD, PDF y DOCX de hasta 5 MB. Los PDF deben contener texto seleccionable; los documentos escaneados requieren OCR antes de adjuntarlos.
 
-El dictado utiliza el micrófono del navegador mediante `streamlit-mic-recorder`; no requiere una clave de API. Al detener la grabación, el componente utiliza el reconocimiento de voz de Google y coloca la transcripción en el área editable antes de clasificarla. La disponibilidad puede variar según el navegador y requiere conexión a internet.
+El dictado utiliza el micrófono del navegador con `st.audio_input` y transcribe el audio con OpenAI Speech-to-Text (`gpt-4o-mini-transcribe`). Debes configurar `OPENAI_API_KEY` en Streamlit Cloud (Secrets) o como variable de entorno para habilitar esta función.
 
 ## Reproducir el análisis
 
