@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+import wave
 from io import BytesIO
 from pathlib import Path
 
@@ -240,11 +241,49 @@ def transcribe_audio_with_openai(audio_file, api_key: str) -> str:
         model=DICTATION_MODEL,
         file=buffer,
         language="es",
+        prompt="Transcribe en espanol, respetando palabras y puntuacion basica.",
     )
     text = (transcript.text or "").strip()
     if not text:
         raise UserInputError("La transcripcion llego vacia. Intenta grabar de nuevo.")
     return text
+
+
+def inspect_audio_level(audio_bytes: bytes) -> tuple[float | None, float | None]:
+    """Devuelve (duracion_segundos, rms_normalizado) para diagnostico de microfono."""
+    try:
+        with wave.open(BytesIO(audio_bytes), "rb") as wav_file:
+            channels = wav_file.getnchannels()
+            sample_width = wav_file.getsampwidth()
+            frame_rate = wav_file.getframerate()
+            frame_count = wav_file.getnframes()
+            frames = wav_file.readframes(frame_count)
+
+        if frame_rate <= 0 or frame_count <= 0 or not frames:
+            return None, None
+
+        duration_seconds = frame_count / frame_rate
+
+        if sample_width == 1:
+            samples = np.frombuffer(frames, dtype=np.uint8).astype(np.float32)
+            samples = (samples - 128.0) / 128.0
+        elif sample_width == 2:
+            samples = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
+        elif sample_width == 4:
+            samples = np.frombuffer(frames, dtype=np.int32).astype(np.float32) / 2147483648.0
+        else:
+            return duration_seconds, None
+
+        if channels > 1:
+            samples = samples.reshape(-1, channels).mean(axis=1)
+
+        if samples.size == 0:
+            return duration_seconds, None
+
+        rms = float(np.sqrt(np.mean(np.square(samples))))
+        return duration_seconds, rms
+    except Exception:
+        return None, None
 
 
 def alternatives(model, text: str, top_n: int = 3):
@@ -348,6 +387,10 @@ elif input_mode == "Dictar":
         "El navegador solicitara permiso para usar el microfono. Al terminar la grabacion, el audio "
         "se transcribira con OpenAI Speech-to-Text antes de clasificarlo."
     )
+    st.caption(
+        "Nota: este control no siempre muestra ondas en tiempo real. Usa el tiempo grabado y la vista "
+        "previa del audio para confirmar que si se capturo sonido."
+    )
     api_key = get_openai_api_key()
     if not api_key:
         st.warning(
@@ -362,11 +405,34 @@ elif input_mode == "Dictar":
     )
 
     if recorded_audio is not None:
-        audio_fingerprint = hashlib.sha256(recorded_audio.getvalue()).hexdigest()
+        audio_bytes = recorded_audio.getvalue()
+        duration_seconds, rms_level = inspect_audio_level(audio_bytes)
+        audio_size_kb = len(audio_bytes) / 1024
+
+        if duration_seconds is not None:
+            if rms_level is None:
+                st.caption(f"Audio recibido: {duration_seconds:.1f} s · {audio_size_kb:.1f} KB")
+            else:
+                st.caption(
+                    f"Audio recibido: {duration_seconds:.1f} s · {audio_size_kb:.1f} KB · nivel RMS {rms_level:.4f}"
+                )
+        else:
+            st.caption(f"Audio recibido: {audio_size_kb:.1f} KB")
+
+        very_low_signal = rms_level is not None and rms_level < 0.002
+        if very_low_signal:
+            st.warning(
+                "El audio parece casi en silencio. Revisa permisos del microfono, dispositivo de entrada "
+                "y volumen de captura del sistema antes de transcribir."
+            )
+
+        audio_fingerprint = hashlib.sha256(audio_bytes).hexdigest()
         if audio_fingerprint != st.session_state.get("_audio_fingerprint"):
             st.session_state._audio_fingerprint = audio_fingerprint
             if not api_key:
                 st.error("No se pudo transcribir porque falta `OPENAI_API_KEY`.")
+            elif very_low_signal:
+                st.error("No se transcribio porque el audio capturado tiene una senal muy baja.")
             else:
                 try:
                     with st.spinner("Transcribiendo audio…"):
