@@ -42,13 +42,7 @@ La aplicación muestra el ODS predicho y las principales alternativas. Los valor
 
 La interfaz admite documentos TXT, MD, PDF y DOCX de hasta 5 MB. Los PDF deben contener texto seleccionable; los documentos escaneados requieren OCR antes de adjuntarlos.
 
-El dictado utiliza el micrófono del navegador y transcribe grabaciones de hasta 60 segundos mediante `gpt-4o-mini-transcribe`. Configura la clave sin añadirla al repositorio:
-
-```bash
-cp .streamlit/secrets.toml.example .streamlit/secrets.toml
-```
-
-Después reemplaza el valor de `OPENAI_API_KEY` en `.streamlit/secrets.toml`. En Streamlit Community Cloud agrega la misma variable desde **App settings → Secrets**. El audio se envía a OpenAI únicamente cuando la persona pulsa **Transcribir el audio**; la transcripción queda editable antes de clasificarla.
+El dictado utiliza el micrófono del navegador mediante `streamlit-mic-recorder`; no requiere una clave de API. Al detener la grabación, el componente utiliza el reconocimiento de voz de Google y coloca la transcripción en el área editable antes de clasificarla. La disponibilidad puede variar según el navegador y requiere conexión a internet.
 
 ## Reproducir el análisis
 

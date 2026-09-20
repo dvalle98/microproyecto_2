@@ -32,7 +32,7 @@ Los radios se mantienen entre 10 y 14 px. La profundidad proviene de sombras sua
 
 ## Movimiento y estados
 
-El único gesto de entrada es el despliegue breve del dictamen mediante recorte y desenfoque. Se desactiva con `prefers-reduced-motion`. La interfaz incluye estados vacío, validación por texto ausente o demasiado corto, extracción correcta o fallida, transcripción pendiente, carga del modelo y errores recuperables de archivo, credencial, red o cuota.
+El único gesto de entrada es el despliegue breve del dictamen mediante recorte y desenfoque. Se desactiva con `prefers-reduced-motion`. La interfaz incluye estados vacío, validación por texto ausente o demasiado corto, extracción correcta o fallida, permiso de micrófono, transcripción pendiente, carga del modelo y errores recuperables de archivo, navegador o red.
 
 ## Responsividad
 

@@ -11,6 +11,6 @@ nbformat==5.11.1
 nbconvert==7.17.1
 ipykernel==7.3.0
 streamlit==1.64.0
-openai==3.16.2
 pypdf==6.19.0
 python-docx==1.2.0
+streamlit-mic-recorder==0.0.8

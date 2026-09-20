@@ -1,12 +1,12 @@
 """Interfaz Streamlit para clasificar textos en los ODS 1 a 16."""
 
 import hashlib
-import os
 from pathlib import Path
 
 import joblib
 import numpy as np
 import streamlit as st # libreria para crear la interfaz web de la aplicación
+from streamlit_mic_recorder import speech_to_text
 
 # El import registra la función que el pipeline serializado necesita al cargarse.
 from src.text_processing import clean_corpus  # noqa: F401
@@ -14,7 +14,6 @@ from src.input_processing import (
     MAX_TEXT_CHARACTERS,
     UserInputError,
     extract_document_text,
-    transcribe_audio,
 )
 
 
@@ -122,7 +121,6 @@ st.markdown(
         background: rgba(255,253,245,.65); border-color: var(--rule); border-radius: 12px;
     }
     [data-testid="stFileUploader"] section:hover { border-color: var(--mineral); }
-    [data-testid="stAudioInput"] { margin-bottom: .3rem; }
     [data-testid="stTextArea"] textarea {
         min-height: 112px; background: var(--sheet); color: var(--ink);
         border: 1px solid var(--ink); border-radius: 12px; box-shadow: 0 12px 28px rgba(16,38,61,.08);
@@ -193,29 +191,6 @@ def alternatives(model, text: str, top_n: int = 3):
     return [(int(classes[i]), float(margins[i]), float(scale)) for i, scale in zip(order, scaled)]
 
 
-def openai_api_key() -> str:
-    """Obtiene la clave desde Streamlit Secrets o, localmente, desde el entorno."""
-    try:
-        secret = st.secrets.get("OPENAI_API_KEY", "")
-    except (FileNotFoundError, KeyError):
-        secret = ""
-    return str(secret or os.getenv("OPENAI_API_KEY", "")).strip()
-
-
-def transcription_error_message(exc: Exception) -> str:
-    """Convierte fallos de red/API en instrucciones recuperables sin filtrar secretos."""
-    name = type(exc).__name__
-    if name == "AuthenticationError":
-        return "La credencial de transcripción no es válida. Revisa OPENAI_API_KEY en los secretos de la aplicación."
-    if name == "RateLimitError":
-        return "El servicio de transcripción alcanzó su límite temporal. Espera un momento e inténtalo de nuevo."
-    if name in {"APIConnectionError", "APITimeoutError"}:
-        return "No fue posible conectar con el servicio de transcripción. Conserva tu grabación e inténtalo nuevamente."
-    if isinstance(exc, UserInputError):
-        return str(exc)
-    return "No fue posible transcribir el audio. Intenta otra grabación o escribe el texto manualmente."
-
-
 st.markdown('<div class="top-rule"></div>', unsafe_allow_html=True)
 st.title("¿Qué objetivo moviliza este texto?")
 st.markdown(
@@ -283,28 +258,25 @@ elif input_mode == "Adjuntar archivo":
                     )
 
 else:
-    recorded_audio = st.audio_input(
-        "Dictar el texto",
-        sample_rate=16_000,
-        help="Graba una idea en español de hasta 60 segundos.",
-    )
+    st.markdown("**Dictar el texto**")
     st.caption(
-        "Al pulsar **Transcribir el audio**, la grabación se enviará a OpenAI para convertirla en texto. "
-        "La clasificación ODS se realiza después y puedes corregir la transcripción."
+        "El navegador solicitará permiso para usar el micrófono. Al detener el dictado, el audio se procesará "
+        "mediante el reconocimiento de voz de Google; revisa el texto antes de clasificarlo."
     )
-    transcribe = st.button(
-        "Transcribir el audio",
-        disabled=recorded_audio is None,
+    dictated_text = speech_to_text(
+        language="es-CO",
+        start_prompt="Iniciar dictado",
+        stop_prompt="Detener y transcribir",
+        just_once=True,
         use_container_width=True,
+        key="ods_dictation",
     )
-    if transcribe and recorded_audio is not None:
-        with st.spinner("Transcribiendo el dictado…"):
-            try:
-                transcript = transcribe_audio(recorded_audio.getvalue(), openai_api_key())
-                st.session_state.analysis_text = transcript
-                st.success("Dictado transcrito. Revisa el texto antes de clasificarlo.")
-            except Exception as exc:
-                st.error(transcription_error_message(exc))
+    if dictated_text:
+        normalized_dictation = dictated_text.strip()
+        if normalized_dictation and normalized_dictation != st.session_state.get("_last_dictation"):
+            st.session_state.analysis_text = normalized_dictation[:MAX_TEXT_CHARACTERS]
+            st.session_state._last_dictation = normalized_dictation
+            st.success("Dictado transcrito. Revisa el texto antes de clasificarlo.")
 
 left, right = st.columns([1.55, 1], gap="large")
 with left:

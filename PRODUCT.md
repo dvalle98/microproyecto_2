@@ -33,7 +33,7 @@ Se ejecuta como demostración académica en Streamlit. El usuario redacta un tex
 - `LinearSVC` produce márgenes de decisión, no probabilidades calibradas.
 - El modelo se carga desde `models/pipeline_ods.joblib` y requiere el módulo local `src.text_processing`.
 - Los documentos admitidos son TXT, MD, PDF y DOCX de hasta 5 MB; los PDF escaneados requieren OCR previo.
-- El dictado admite hasta 60 segundos y requiere `OPENAI_API_KEY`; el audio se envía a OpenAI solo al solicitar la transcripción.
+- El dictado utiliza el micrófono del navegador y el reconocimiento de voz de Google mediante `streamlit-mic-recorder`; no requiere una clave propia y depende de conexión a internet y compatibilidad del navegador.
 - Las métricas del conjunto de prueba son: exactitud 0,8727, F1 macro 0,8406 y F1 ponderado 0,8727.
 
 ## Evidence on Hand
