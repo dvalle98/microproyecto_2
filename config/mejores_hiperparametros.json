@@ -1,29 +1,24 @@
 {
   "modelo": "LinearSVC",
   "criterio_seleccion": "f1_macro",
-  "validacion": "StratifiedGroupKFold de 5 folds",
+  "validacion": "StratifiedKFold de 5 folds",
   "tfidf": {
-    "ngram_range": [1, 2],
+    "ngram_range": [1, 1],
     "min_df": 3,
-    "max_df": 0.3,
+    "max_df": 0.8,
     "sublinear_tf": true,
-    "norm": "l2",
-    "strip_accents": null
+    "preprocesamiento": "src.text_processing.clean_corpus"
   },
   "svd": {
     "n_components": 300,
-    "n_iter": 7,
     "random_state": 42
   },
   "clasificador": {
-    "C": 0.5,
+    "C": 1.0,
     "class_weight": "balanced",
     "random_state": 42
   },
   "resultado_cv": {
-    "f1_macro_media": 0.8354,
-    "f1_macro_desviacion": 0.0147,
-    "accuracy_media": 0.8648,
-    "f1_weighted_media": 0.8641
+    "f1_macro_media": 0.8438
   }
 }

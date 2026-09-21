@@ -1,7 +1,7 @@
 {
-  "fecha_generacion_utc": "2026-09-20T15:18:59.871717+00:00",
+  "fecha_generacion_utc": "2026-09-21T03:28:40.553482+00:00",
   "archivo_datos_sha256": "685f219c3741347e8d97341c29b84ebd3410952fcdcce61f4664ec67a1c0654d",
-  "archivo_modelo_sha256": "22c85e09841233a938b3391920725a52142938a776d10bcfeae0fa9818737a24",
+  "archivo_modelo_sha256": "fe185034521fdc87140d9bf696883917db0e9ca46b6d1848191a9ed40aa0bad0",
   "clases": [
     1,
     2,
@@ -25,18 +25,18 @@
   "hiperparametros": {
     "tfidf_ngram_range": [
       1,
-      2
+      1
     ],
     "tfidf_min_df": 3,
-    "tfidf_max_df": 0.3,
+    "tfidf_max_df": 0.8,
     "svd_n_components": 300,
-    "svm_C": 0.5,
+    "svm_C": 1.0,
     "class_weight": "balanced"
   },
   "metricas_test": {
-    "accuracy": 0.8726708074534162,
-    "f1_macro": 0.8406067028884459,
-    "f1_weighted": 0.8727235428920427
+    "accuracy": 0.8742,
+    "f1_macro": 0.8443,
+    "f1_weighted": 0.8736
   },
   "limitacion": "El conjunto de entrenamiento no contiene ejemplos del ODS 17."
 }
